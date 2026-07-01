@@ -87,6 +87,166 @@
     @media (orientation: landscape) and (max-height: 520px) {
       #rotate { display: flex; }
     }
+
+    /* ---- backend chrome: account + leaderboard ---- */
+    #chrome {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: calc(var(--safe-bottom) + 14px);
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      z-index: 10;
+      padding: 0 12px;
+      transition: opacity 0.2s, transform 0.2s;
+    }
+    /* Hide chrome while actively playing so it can't be mis-tapped. */
+    body.playing #chrome { opacity: 0; transform: translateY(20px); pointer-events: none; }
+    .chip {
+      border: 1px solid rgba(125, 249, 255, 0.35);
+      border-radius: 999px;
+      background: rgba(10, 6, 30, 0.62);
+      color: #cdeaff;
+      font: 600 14px/1 system-ui, sans-serif;
+      padding: 11px 16px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      cursor: pointer;
+      max-width: 60vw;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .chip:active { transform: scale(0.95); }
+    #lbBtn { border-color: rgba(255, 214, 92, 0.45); color: #ffe6a6; flex: none; }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      background: rgba(3, 1, 12, 0.72);
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+    }
+    #overlay[hidden] { display: none; }
+    #sheet {
+      position: relative;
+      width: 100%;
+      max-width: 460px;
+      max-height: 88vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: linear-gradient(180deg, #0c0630, #070320);
+      border: 1px solid rgba(125, 249, 255, 0.28);
+      border-bottom: none;
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 -8px 40px rgba(125, 249, 255, 0.15);
+      padding: 22px 20px calc(var(--safe-bottom) + 26px);
+      animation: rise 0.22s ease-out;
+    }
+    @keyframes rise { from { transform: translateY(30px); opacity: 0.4; } to { transform: none; opacity: 1; } }
+    #closeBtn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 34px;
+      height: 34px;
+      border: none;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #9fb6d6;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #sheetBody h2 { font-size: 22px; margin-bottom: 10px; color: #eaf6ff; }
+    .lead { font-size: 15px; margin-bottom: 8px; }
+    .muted { color: #94a7c6; font-size: 14px; line-height: 1.5; }
+    .small { font-size: 12.5px; }
+    .badge {
+      display: inline-block;
+      font: 700 10px/1 system-ui;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #ffd65c;
+      border: 1px solid rgba(255, 214, 92, 0.5);
+      border-radius: 6px;
+      padding: 3px 5px;
+      vertical-align: middle;
+      margin-left: 4px;
+    }
+    .tabs { display: flex; gap: 8px; margin: 16px 0 12px; }
+    .tab {
+      flex: 1;
+      border: 1px solid rgba(125, 249, 255, 0.22);
+      background: transparent;
+      color: #9fb6d6;
+      border-radius: 10px;
+      padding: 10px;
+      font: 600 14px system-ui;
+      cursor: pointer;
+    }
+    .tab.on { background: rgba(125, 249, 255, 0.14); color: #7df9ff; border-color: rgba(125, 249, 255, 0.5); }
+    .form { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+    .form input {
+      border: 1px solid rgba(125, 249, 255, 0.25);
+      background: rgba(0, 0, 0, 0.28);
+      color: #eaf6ff;
+      border-radius: 10px;
+      padding: 13px 14px;
+      font-size: 16px; /* 16px avoids iOS zoom-on-focus */
+      outline: none;
+    }
+    .form input:focus { border-color: #7df9ff; }
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font: 700 15px system-ui;
+      cursor: pointer;
+      color: #05010f;
+    }
+    .btn.primary { background: linear-gradient(90deg, #7df9ff, #7fb0ff); }
+    .btn.primary:disabled { opacity: 0.6; }
+    .btn.danger { background: transparent; color: #ff8fb4; border: 1px solid rgba(255, 143, 180, 0.5); margin-top: 6px; }
+    .err { color: #ff8fb4; font-size: 13.5px; margin: 2px 0; }
+    .lb-rank { margin: 10px 0 14px; font-size: 15px; color: #eaf6ff; }
+    .lb-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .lb-row.mine { background: rgba(255, 214, 92, 0.14); outline: 1px solid rgba(255, 214, 92, 0.5); }
+    .lb-pos { width: 30px; color: #7df9ff; font-weight: 800; text-align: right; }
+    .lb-row.mine .lb-pos { color: #ffd65c; }
+    .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-score { font-weight: 700; color: #eaf6ff; }
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--safe-bottom) + 84px);
+      transform: translateX(-50%) translateY(10px);
+      z-index: 40;
+      background: rgba(10, 6, 30, 0.92);
+      border: 1px solid rgba(125, 249, 255, 0.4);
+      color: #eaf6ff;
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 14px;
+      max-width: 86vw;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
@@ -94,6 +254,22 @@
     <canvas id="canvas"></canvas>
   </div>
   <button id="mute" aria-label="Toggle sound">♪</button>
+
+  <!-- Backend chrome: account identity + leaderboards -->
+  <div id="chrome">
+    <button id="accountBtn" class="chip">◐ …</button>
+    <button id="lbBtn" class="chip">🏆 Ranks</button>
+  </div>
+
+  <div id="overlay" hidden>
+    <div id="sheet">
+      <button id="closeBtn" aria-label="Close">✕</button>
+      <div id="sheetBody"></div>
+    </div>
+  </div>
+
+  <div id="toast" hidden></div>
+
   <div id="rotate">↻ Rotate your device to portrait to play Pulse</div>
   <script type="module" src="__BUNDLE__"></script>
   <script>

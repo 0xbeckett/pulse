@@ -35,7 +35,13 @@ export class Game {
   private ctx: CanvasRenderingContext2D;
   private audio: Audio;
   private particles = new Particles(360);
-  private storage = new Storage();
+  readonly storage: Storage;
+
+  /** Fired when a run ends, with the final score, best combo, and whether it
+   *  set a new local record. The host wires this to cloud save + score submit. */
+  onRunEnd: ((score: number, combo: number, isRecord: boolean) => void) | null = null;
+  /** Fired whenever the play state changes (menu / playing / dead). */
+  onStateChange: ((state: State) => void) | null = null;
 
   // Logical (CSS px) dimensions and device pixel ratio.
   private W = 0;
@@ -84,9 +90,10 @@ export class Game {
 
   private starLayers: { x: number; y: number; z: number }[] = [];
 
-  constructor(canvas: HTMLCanvasElement, audio: Audio) {
+  constructor(canvas: HTMLCanvasElement, audio: Audio, storage?: Storage) {
     this.canvas = canvas;
     this.audio = audio;
+    this.storage = storage ?? new Storage();
     const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("2D canvas unavailable");
     this.ctx = ctx;
@@ -170,6 +177,7 @@ export class Game {
     }
     this.audio.start();
     this.storage.countPlay();
+    this.onStateChange?.(this.state);
   }
 
   private die() {
@@ -177,7 +185,10 @@ export class Game {
     this.state = "dead";
     this.deadAt = this.now;
     this.thrusting = false;
+    const finalScore = Math.floor(this.score);
     this.newRecord = this.storage.submit(this.score, this.combo);
+    this.onRunEnd?.(finalScore, this.combo, this.newRecord);
+    this.onStateChange?.(this.state);
     this.audio.hit();
     this.buzz([40, 60, 40]);
     this.addShake(0.5, 22);

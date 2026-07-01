@@ -11,6 +11,7 @@ import { authRoutes } from "./routes/auth.ts";
 import { saveRoutes } from "./routes/save.ts";
 import { scoreRoutes } from "./routes/scores.ts";
 import { leaderboardRoutes } from "./routes/leaderboard.ts";
+import { staticSite } from "./lib/static.ts";
 
 export function createApp(store: Store): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -43,6 +44,12 @@ export function createApp(store: Store): Hono<AppEnv> {
   app.route("/v1/save", saveRoutes);
   app.route("/v1/scores", scoreRoutes);
   app.route("/v1/leaderboard", leaderboardRoutes);
+
+  // Static game client (same origin as the API). Registered last so it only
+  // catches non-API GETs. Empty staticDir ⇒ API-only (tests / headless).
+  if (config.staticDir) {
+    app.get("*", staticSite(config.staticDir));
+  }
 
   app.notFound((c) => c.json({ error: "not_found" }, 404));
   app.onError((err, c) => {

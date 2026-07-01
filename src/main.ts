@@ -1,12 +1,31 @@
 /** Bootstrap: wire input, mute toggle, resize, and kick off the loop. */
 import { Audio } from "./audio";
 import { Game } from "./game";
+import { Storage } from "./storage";
+import { Api } from "./api";
+import { UI } from "./ui";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
 const muteBtn = document.getElementById("mute") as HTMLButtonElement;
 
 const audio = new Audio();
-const game = new Game(canvas, audio);
+const storage = new Storage();
+const game = new Game(canvas, audio, storage);
+const api = new Api();
+const ui = new UI(api, storage, game);
+
+// Talk to the backend: guest identity + cloud-save pull on load, and push the
+// save + submit the score on every run end. All of this is best-effort — the
+// game stays fully playable if the backend is unreachable.
+game.onRunEnd = (score, combo) => ui.handleRunEnd(score, combo);
+ui.boot().then(() => {
+  // Apply the muted preference from the (now-synced) cloud save.
+  const m = storage.settings.muted;
+  if (typeof m === "boolean" && m !== audio.muted) {
+    audio.muted = m;
+    reflectMute();
+  }
+});
 
 function reflectMute() {
   muteBtn.textContent = audio.muted ? "🔇" : "♪";
@@ -48,6 +67,9 @@ muteBtn.addEventListener("click", (e) => {
   audio.unlock();
   audio.toggleMute();
   reflectMute();
+  // Persist the preference to the cloud save alongside local storage.
+  storage.setSetting("muted", audio.muted);
+  api.putSave(storage.snapshot());
 });
 
 // Keep the canvas matched to the viewport (and safe-area) on rotate/resize.

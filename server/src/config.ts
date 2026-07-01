@@ -43,6 +43,10 @@ export const config = {
   // SQLite database file. ":memory:" is honoured for tests.
   dbPath: env("PULSE_DB_PATH", "./data/pulse.sqlite"),
 
+  // Directory of the built static game client to serve at the site root
+  // (same origin as the API). Empty ⇒ API only (the default, used by tests).
+  staticDir: env("PULSE_STATIC_DIR", ""),
+
   // Comma-separated list of allowed CORS origins.
   corsOrigins: env(
     "PULSE_CORS_ORIGINS",

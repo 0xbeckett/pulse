@@ -1,12 +1,20 @@
 [Unit]
-Description=Pulse static server (dist)
+Description=Pulse — game client + backend (auth, cloud saves, leaderboards)
 After=network.target
 
 [Service]
 Type=simple
+# The backend serves the built static game (PULSE_STATIC_DIR) AND the /v1 API
+# on one port, so the whole app lives behind a single 127.0.0.1 port + tunnel.
+Environment=NODE_ENV=production
 Environment=PORT=8787
-WorkingDirectory=/home/beckett/Projects/pulse
-ExecStart=/usr/local/bin/bun run /home/beckett/Projects/pulse/scripts/serve.ts
+Environment=HOST=127.0.0.1
+Environment=PULSE_STATIC_DIR=/home/beckett/Projects/pulse/dist
+Environment=PULSE_DB_PATH=/home/beckett/Projects/pulse/server/data/pulse.sqlite
+# PULSE_JWT_SECRET is injected via a drop-in kept out of the repo:
+#   ~/.config/systemd/user/pulse.service.d/secret.conf
+WorkingDirectory=/home/beckett/Projects/pulse/server
+ExecStart=/usr/local/bin/bun run /home/beckett/Projects/pulse/server/src/index.ts
 Restart=always
 RestartSec=2
 

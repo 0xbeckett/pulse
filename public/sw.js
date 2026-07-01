@@ -24,6 +24,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  // Never cache backend API calls — leaderboards/saves must always be live, and
+  // caching them would also serve stale auth-scoped data. Let them hit network.
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/v1/") || url.pathname === "/health") return;
   event.respondWith(
     caches.match(event.request).then((hit) => {
       if (hit) return hit;
