@@ -25,7 +25,12 @@ function req(path: string, init: RequestInit = {}) {
     init,
   );
 }
-async function json(path: string, method: string, body?: unknown, token?: string) {
+async function json(
+  path: string,
+  method: string,
+  body?: unknown,
+  token?: string,
+): Promise<{ status: number; body: any }> {
   const res = await req(path, {
     method,
     headers: {
@@ -34,14 +39,15 @@ async function json(path: string, method: string, body?: unknown, token?: string
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  return { status: res.status, body: await res.json().catch(() => null) };
+  const data = (await res.json().catch(() => null)) as any;
+  return { status: res.status, body: data };
 }
 
 describe("health", () => {
   test("GET /health returns ok", async () => {
     const res = await req("/health");
     expect(res.status).toBe(200);
-    const b = await res.json();
+    const b = (await res.json()) as any;
     expect(b.status).toBe("ok");
   });
 });
@@ -189,6 +195,12 @@ describe("guest → account upgrade keeps save", () => {
     });
     expect(login.status).toBe(200);
     expect(login.body.user.id).toBe(guestId);
+
+    // The upgraded device no longer hands out a guest token; it tells the
+    // client to log in instead.
+    const reGuest = await json("/v1/auth/guest", "POST", { deviceId: "device-upgrade-42" });
+    expect(reGuest.status).toBe(409);
+    expect(reGuest.body.error).toBe("device_upgraded");
   });
 });
 

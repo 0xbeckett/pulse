@@ -154,12 +154,15 @@ export class SqliteStore implements Store {
     displayName?: string,
   ): User {
     const now = Date.now();
+    // device_id is intentionally retained: the device now maps to this real
+    // account, so a later /auth/guest from the same device returns 409
+    // (device_upgraded) prompting a login rather than spawning a fresh guest.
     if (displayName !== undefined) {
       this.db
         .prepare(
           `UPDATE users
              SET is_guest = 0, email = ?, password_hash = ?, display_name = ?,
-                 device_id = NULL, updated_at = ?
+                 updated_at = ?
            WHERE id = ?`,
         )
         .run(email.toLowerCase(), passwordHash, displayName, now, userId);
@@ -168,7 +171,7 @@ export class SqliteStore implements Store {
         .prepare(
           `UPDATE users
              SET is_guest = 0, email = ?, password_hash = ?,
-                 device_id = NULL, updated_at = ?
+                 updated_at = ?
            WHERE id = ?`,
         )
         .run(email.toLowerCase(), passwordHash, now, userId);
