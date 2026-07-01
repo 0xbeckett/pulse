@@ -1,0 +1,19 @@
+{
+  "name": "Pulse",
+  "short_name": "Pulse",
+  "description": "A one-thumb neon endless arcade game.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05010f",
+  "theme_color": "#05010f",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

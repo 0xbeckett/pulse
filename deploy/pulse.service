@@ -1,0 +1,14 @@
+[Unit]
+Description=Pulse static server (dist)
+After=network.target
+
+[Service]
+Type=simple
+Environment=PORT=8787
+WorkingDirectory=/home/beckett/Projects/pulse
+ExecStart=/usr/local/bin/bun run /home/beckett/Projects/pulse/scripts/serve.ts
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
