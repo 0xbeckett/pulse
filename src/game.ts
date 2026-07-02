@@ -15,6 +15,17 @@ interface Gate {
   gapY: number;
   gapH: number;
   scored: boolean;
+  cleared: boolean; // blasted open by a Pulse — no longer lethal
+  clearT: number; // 0..1 open animation progress
+}
+
+interface Shockwave {
+  x: number;
+  y: number;
+  r: number;
+  maxR: number;
+  life: number;
+  maxLife: number;
 }
 
 const CYAN: [number, number, number] = [125, 249, 255];
@@ -25,6 +36,14 @@ const WHITE: [number, number, number] = [235, 246, 255];
 // Combo needed to bump the multiplier by one whole step.
 const COMBO_PER_MULT = 6;
 const MAX_MULT = 12;
+
+// --- The Pulse (signature mechanic) ---
+// Seconds of pure survival to fill the meter from empty. Near-misses fill it
+// much faster (see PULSE_NEAR_GAIN), so aggressive play is rewarded with a
+// quicker recharge — risk feeds the panic button.
+const PULSE_CHARGE = 13;
+const PULSE_NEAR_GAIN = 0.14;
+const PULSE_PASS_GAIN = 0.02;
 
 function rgb(c: [number, number, number], a = 1) {
   return `rgba(${c[0]},${c[1]},${c[2]},${a})`;
@@ -56,6 +75,16 @@ export class Game {
   private vy = 0;
   private pr = 14;
   private thrusting = false;
+
+  // The Pulse: metered radial shockwave.
+  private pulseEnergy = 0; // 0..1
+  private pulseReadyPinged = false; // chime once when it fills
+  private invuln = 0; // brief post-Pulse safe window (seconds)
+  private shockwaves: Shockwave[] = [];
+  // Double-tap detection (deliberate tap-tap, distinct from hold-to-thrust).
+  private pressAt = 0;
+  private lastReleaseAt = -1;
+  private lastTapWasShort = false;
 
   // World.
   private gates: Gate[] = [];
@@ -135,6 +164,15 @@ export class Game {
   press() {
     this.audio.unlock();
     if (this.state === "playing") {
+      // A quick tap-tap (short first tap, small gap) fires the Pulse when the
+      // meter is full. The tightness of the gesture keeps it from triggering
+      // on the normal hold/release cadence of thrusting.
+      const gap = this.now - this.lastReleaseAt;
+      if (this.pulseEnergy >= 1 && this.lastTapWasShort && gap >= 0 && gap < 0.22) {
+        this.firePulse();
+        this.lastTapWasShort = false; // consume the chain
+      }
+      this.pressAt = this.now;
       this.thrusting = true;
       return;
     }
@@ -145,6 +183,11 @@ export class Game {
   }
 
   release() {
+    if (this.state === "playing") {
+      const dur = this.now - this.pressAt;
+      this.lastTapWasShort = dur >= 0 && dur < 0.18;
+      this.lastReleaseAt = this.now;
+    }
     this.thrusting = false;
   }
 
@@ -167,6 +210,13 @@ export class Game {
     this.shakeTime = 0;
     this.nextMilestone = 500;
     this.popups.length = 0;
+    this.pulseEnergy = 0;
+    this.pulseReadyPinged = false;
+    this.invuln = 0;
+    this.shockwaves.length = 0;
+    this.lastReleaseAt = -1;
+    this.lastTapWasShort = false;
+    this.pressAt = this.now;
     this.particles.clear();
     this.gateSpacing = this.W * 0.62;
     // Seed a few gates ahead so the first one isn't instantly in your face.
@@ -202,6 +252,55 @@ export class Game {
     this.particles.burst(this.px, this.py, 30, WHITE, { speed: 6, size: 3, life: 0.6 });
   }
 
+  /** Grow the Pulse meter and chime the moment it tops off. */
+  private addEnergy(amount: number) {
+    if (this.pulseEnergy >= 1) return;
+    this.pulseEnergy = Math.min(1, this.pulseEnergy + amount);
+    if (this.pulseEnergy >= 1 && !this.pulseReadyPinged) {
+      this.pulseReadyPinged = true;
+      this.audio.pulseReady();
+      this.buzz(18);
+      this.pushPopup(this.px, this.py - this.pr * 2.6, "PULSE READY", CYAN);
+    }
+  }
+
+  /** Discharge the meter: a radial shockwave that blasts nearby gates open,
+   *  grants a brief safe window, and pays out combo — the signature move. */
+  private firePulse() {
+    this.pulseEnergy = 0;
+    this.pulseReadyPinged = false;
+    this.invuln = 0.55;
+    const r = Math.max(this.W, this.H) * 0.62;
+    this.shockwaves.push({ x: this.px, y: this.py, r: this.pr, maxR: r, life: 0.55, maxLife: 0.55 });
+
+    // Blast open every not-yet-cleared gate within the shockwave radius.
+    const gw = this.W * 0.06;
+    for (const g of this.gates) {
+      if (g.cleared) continue;
+      const dx = g.x + gw / 2 - this.px;
+      if (dx > -gw && dx < r) {
+        g.cleared = true;
+        g.clearT = 0;
+        this.particles.burst(g.x + gw / 2, g.gapY, 8, CYAN, { speed: 6, size: 3, life: 0.6 });
+      }
+    }
+
+    // Juice — this is the money moment, so lean into it.
+    this.audio.pulse();
+    this.buzz([30, 20, 60]);
+    this.addShake(0.42, 26);
+    this.flashColor = CYAN;
+    this.flash = 1;
+    this.particles.burst(this.px, this.py, 48, CYAN, { speed: 11, size: 4, life: 0.85 });
+    this.particles.burst(this.px, this.py, 22, WHITE, { speed: 7, size: 3, life: 0.5 });
+
+    // Reward: a combo bump so a well-placed Pulse feeds the multiplier loop.
+    this.combo += 3;
+    this.mult = Math.min(MAX_MULT, 1 + Math.floor(this.combo / COMBO_PER_MULT));
+    this.score += 60 * this.mult;
+    this.pushPopup(this.px, this.py - this.pr * 2.4, "PULSE!", CYAN);
+  }
+
   private buzz(pattern: number | number[]) {
     if (this.audio.muted) return; // treat mute as "quiet mode"
     try {
@@ -223,7 +322,7 @@ export class Game {
     let gapY = this.lastGapY + drift;
     gapY = Math.max(margin, Math.min(this.H - margin, gapY));
     this.lastGapY = gapY;
-    return { x, gapY, gapH, scored: false };
+    return { x, gapY, gapH, scored: false, cleared: false, clearT: 0 };
   }
 
   // ---- update ----------------------------------------------------------
@@ -240,6 +339,13 @@ export class Game {
       this.popups[i].y -= dt * 40;
       if (this.popups[i].life <= 0) this.popups.splice(i, 1);
     }
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const s = this.shockwaves[i];
+      s.life -= dt;
+      const t = 1 - s.life / s.maxLife;
+      s.r = s.maxR * (1 - Math.pow(1 - t, 3)); // ease-out expansion
+      if (s.life <= 0) this.shockwaves.splice(i, 1);
+    }
     this.particles.update(dt);
 
     if (this.state !== "playing") {
@@ -247,6 +353,10 @@ export class Game {
       this.py = this.H * 0.5 + Math.sin(this.now * 1.8) * this.H * 0.02;
       return;
     }
+
+    // The Pulse: passive charge, safe-window decay, cleared-gate open anim.
+    if (this.invuln > 0) this.invuln = Math.max(0, this.invuln - dt);
+    this.addEnergy(dt / PULSE_CHARGE);
 
     // Difficulty ramp.
     this.speed = Math.min(3.4, this.speed + dt * 0.055);
@@ -291,11 +401,13 @@ export class Game {
     const gw = this.W * 0.06;
     for (const g of this.gates) {
       g.x -= this.scrollSpeed * dt;
+      if (g.cleared && g.clearT < 1) g.clearT = Math.min(1, g.clearT + dt * 3.5);
       if (!g.scored && g.x + gw < this.px) {
         g.scored = true;
         this.onGatePassed(g);
       }
-      if (this.collides(g, gw)) {
+      // Cleared gates and the post-Pulse window are non-lethal.
+      if (!g.cleared && this.invuln <= 0 && this.collides(g, gw)) {
         this.die();
         return;
       }
@@ -334,11 +446,19 @@ export class Game {
   }
 
   private onGatePassed(g: Gate) {
+    // A gate blasted open by a Pulse isn't a skill pass — small credit only.
+    if (g.cleared) {
+      this.combo += 1;
+      this.mult = Math.min(MAX_MULT, 1 + Math.floor(this.combo / COMBO_PER_MULT));
+      this.score += 4 * this.mult;
+      return;
+    }
     const gapTop = g.gapY - g.gapH / 2;
     const gapBot = g.gapY + g.gapH / 2;
     const clearance = Math.min(this.py - this.pr - gapTop, gapBot - (this.py + this.pr));
     const near = clearance < this.pr * 0.9;
 
+    this.addEnergy(near ? PULSE_NEAR_GAIN : PULSE_PASS_GAIN);
     this.combo += near ? 2 : 1;
     this.mult = Math.min(MAX_MULT, 1 + Math.floor(this.combo / COMBO_PER_MULT));
     const gain = (near ? 25 : 10) * this.mult;
@@ -390,6 +510,7 @@ export class Game {
 
     this.drawBackground(ctx);
     if (this.state === "playing" || this.state === "dead") this.drawGates(ctx);
+    this.drawShockwaves(ctx);
     this.particles.render(ctx);
     if (this.state !== "dead") this.drawPlayer(ctx);
     this.drawPopups(ctx);
@@ -459,6 +580,18 @@ export class Game {
       if (g.x > this.W || g.x + gw < 0) continue;
       const gapTop = g.gapY - g.gapH / 2;
       const gapBot = g.gapY + g.gapH / 2;
+      if (g.cleared) {
+        // Blasted open: walls recede off-screen and fade to nothing.
+        const e = g.clearT;
+        const a = (1 - e) * 0.7;
+        if (a <= 0.02) continue;
+        ctx.save();
+        ctx.globalAlpha = a;
+        this.neonRect(ctx, g.x, -gapTop * e, gw, gapTop, CYAN);
+        this.neonRect(ctx, g.x, gapBot + (this.H - gapBot) * e, gw, this.H - gapBot, CYAN);
+        ctx.restore();
+        continue;
+      }
       this.neonRect(ctx, g.x, 0, gw, gapTop, col);
       this.neonRect(ctx, g.x, gapBot, gw, this.H - gapBot, col);
       // Glowing gap edges to read the opening clearly.
@@ -494,7 +627,66 @@ export class Game {
     ctx.restore();
   }
 
+  private drawShockwaves(ctx: CanvasRenderingContext2D) {
+    if (!this.shockwaves.length) return;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of this.shockwaves) {
+      const a = Math.max(0, s.life / s.maxLife);
+      ctx.strokeStyle = rgb(CYAN, a * 0.9);
+      ctx.lineWidth = 6 * a + 1;
+      ctx.shadowColor = rgb(CYAN, a);
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.stroke();
+      // Inner trailing ring for a bit of depth.
+      ctx.strokeStyle = rgb(WHITE, a * 0.5);
+      ctx.lineWidth = 2 * a + 0.5;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r * 0.7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   private drawPlayer(ctx: CanvasRenderingContext2D) {
+    // Charge ring: an arc around the core that fills as the Pulse builds.
+    if (this.state === "playing") {
+      const ready = this.pulseEnergy >= 1;
+      const rr = this.pr * 1.7 + (ready ? Math.sin(this.now * 12) * 1.5 + 1.5 : 0);
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      // Track.
+      ctx.strokeStyle = rgb(WHITE, 0.12);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(this.px, this.py, rr, 0, Math.PI * 2);
+      ctx.stroke();
+      // Fill arc from the top, clockwise.
+      const col = ready ? GOLD : CYAN;
+      ctx.strokeStyle = rgb(col, ready ? 0.95 : 0.85);
+      ctx.lineWidth = 3.5;
+      ctx.shadowColor = rgb(col, 0.9);
+      ctx.shadowBlur = ready ? 16 : 8;
+      ctx.beginPath();
+      const a0 = -Math.PI / 2;
+      ctx.arc(this.px, this.py, rr, a0, a0 + Math.PI * 2 * this.pulseEnergy);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // A halo during the brief post-Pulse safe window.
+    if (this.invuln > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      ctx.strokeStyle = rgb(CYAN, Math.min(1, this.invuln / 0.55) * 0.7);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(this.px, this.py, this.pr * 2.3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     const col = this.thrusting ? CYAN : WHITE;
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
@@ -580,6 +772,10 @@ export class Game {
     ctx.fillStyle = rgb(CYAN, 0.85);
     ctx.font = `600 ${Math.round(this.W * 0.045)}px system-ui, sans-serif`;
     ctx.fillText("HOLD to rise · RELEASE to fall", cx, this.H * 0.42);
+
+    ctx.fillStyle = rgb(GOLD, 0.85);
+    ctx.font = `700 ${Math.round(this.W * 0.042)}px system-ui, sans-serif`;
+    ctx.fillText("DOUBLE-TAP when charged → PULSE blast", cx, this.H * 0.485);
 
     const pulse = 0.6 + Math.sin(this.now * 3) * 0.4;
     ctx.fillStyle = rgb(WHITE, pulse);

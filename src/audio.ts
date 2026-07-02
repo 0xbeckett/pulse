@@ -107,4 +107,19 @@ export class Audio {
   start() {
     this.tone({ freq: 330, freqTo: 660, dur: 0.15, type: "triangle", gain: 0.2 });
   }
+
+  /** Bright shimmer the instant the Pulse meter tops off. */
+  pulseReady() {
+    this.tone({ freq: 880, freqTo: 1760, dur: 0.14, type: "sine", gain: 0.16 });
+  }
+
+  /** Deep, wide discharge boom when the Pulse fires. */
+  pulse() {
+    this.tone({ freq: 180, freqTo: 900, dur: 0.28, type: "sawtooth", gain: 0.3 });
+    this.tone({ freq: 70, freqTo: 30, dur: 0.4, type: "sine", gain: 0.32 });
+    setTimeout(
+      () => this.tone({ freq: 1320, freqTo: 260, dur: 0.22, type: "triangle", gain: 0.18 }),
+      40
+    );
+  }
 }

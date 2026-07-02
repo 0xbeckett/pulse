@@ -89,4 +89,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) game.release();
 });
 
+// Debug handle for headless smoke/verify tooling (invisible to players).
+(window as unknown as { __pulse?: Game }).__pulse = game;
+
 game.start_loop();
